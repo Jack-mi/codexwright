@@ -1,4 +1,6 @@
 import asyncio
+import copy
+import importlib.util
 import json
 import os
 import subprocess
@@ -11,6 +13,7 @@ import pytest
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
+from codexwright.contracts import ArchitectureSpec
 from codexwright.mcp_server import server_for
 from codexwright.service import BuildService
 from codexwright import __version__
@@ -167,6 +170,121 @@ def test_generated_mcp_returns_structured_cli_checkpoint(tmp_path, spec, monkeyp
                 verified = await client.call_tool("mas_verify", {})
                 assert verified.structured_content["status"] == "passed"
     asyncio.run(probe())
+
+
+def generated_mcp_server(tmp_path, spec, monkeypatch, trusted=True):
+    from codexwright.target import scaffold
+    from test_generated_workflow import load
+
+    root = tmp_path / "target"
+    root.mkdir()
+    scaffold(root, spec)
+    flow = load(root)
+    calls = []
+
+    def stub(name):
+        async def perform(request, *, state_path, approve_writes=False):
+            calls.append({"operation": name, "request": request, "state_path": state_path, "approve_writes": approve_writes})
+            return {"status": "passed", "operation": name}
+        perform.__name__ = name
+        return perform
+
+    monkeypatch.setattr(flow, "run", stub("run"))
+    monkeypatch.setattr(flow, "recover", stub("recover"), raising=False)
+    monkeypatch.setitem(sys.modules, "workflow", flow)
+    module_spec = importlib.util.spec_from_file_location("generated_mcp_fixture", root / "mcp_server.py")
+    module = importlib.util.module_from_spec(module_spec)
+    monkeypatch.setitem(sys.modules, module_spec.name, module)
+    sys.path.insert(0, str(root))
+    try:
+        module_spec.loader.exec_module(module)
+    finally:
+        sys.path.pop(0)
+    from pydantic import BaseModel
+
+    class ApprovalForm(BaseModel):
+        approve: bool
+
+    async def approval_handler(ctx, details):
+        assert details["request_sha256"] and details["spec_revision"] == module.SPEC["revision"]
+        answer = await ctx.elicit(details["message"], ApprovalForm)
+        return getattr(answer.action, "value", answer.action) == "accept" and answer.data is not None and answer.data.approve is True
+
+    return module, module.server_for(tmp_path / "state", approval_handler=approval_handler if trusted else None), calls
+
+
+@pytest.mark.parametrize("operation", ["mas_run", "mas_recover"])
+@pytest.mark.parametrize("write_kind", ["workspace_write", "side_effect"])
+@pytest.mark.parametrize("action", ["accept", "decline", "unavailable"])
+def test_generated_mcp_write_approval(tmp_path, spec_dict, monkeypatch, operation, write_kind, action):
+    data = copy.deepcopy(spec_dict)
+    if write_kind == "workspace_write":
+        data["agents"][0]["sandbox"] = "workspace_write"
+    else:
+        data["tools"] = [{"name": "write_value", "kind": "cli", "implementation": "tools/write.py", "input_schema": data["inputs_schema"], "output_schema": data["outputs_schema"], "risk": "write_local", "side_effect": True, "approval": "scope"}]
+        data["agents"][0]["tools"] = ["write_value"]
+        data["verification"]["checks"].append({"id": "write_tool", "kind": "tool_smoke", "target": "tools/write.py", "arguments": ['{"value":"hello"}']})
+    module, server, calls = generated_mcp_server(tmp_path, ArchitectureSpec.model_validate(data), monkeypatch)
+    prompts = []
+
+    async def elicit(context, message, schema):
+        prompts.append(message)
+        if action == "unavailable":
+            raise RuntimeError("No form support")
+        return SimpleNamespace(action=action, data=SimpleNamespace(approve=True) if action == "accept" else None)
+
+    monkeypatch.setattr(module.Context, "elicit", elicit)
+    result = asyncio.run(server.call_tool(operation, {"request": {"value": "hello"}, "run_id": "run_fixture"}))
+    assert len(prompts) == 1 and f"spec revision {data['revision']}" in prompts[0]
+    assert "request SHA-256" in prompts[0]
+    if action == "accept":
+        assert not result.is_error
+        assert calls == [{"operation": operation.removeprefix("mas_"), "request": {"value": "hello"}, "state_path": tmp_path / "state/run_fixture.json", "approve_writes": True}]
+    else:
+        assert result.is_error and not calls
+        assert result.structured_content["error"]["code"] == ("permission_denied" if action == "decline" else "approval_channel_unavailable")
+
+
+@pytest.mark.parametrize("operation", ["mas_run", "mas_recover"])
+def test_generated_mcp_read_only_skips_approval(tmp_path, spec, monkeypatch, operation):
+    module, server, calls = generated_mcp_server(tmp_path, spec, monkeypatch)
+
+    async def forbidden(*args):
+        pytest.fail("Read-only workflow must not request write approval")
+
+    monkeypatch.setattr(module.Context, "elicit", forbidden)
+    result = asyncio.run(server.call_tool(operation, {"request": {"value": "hello"}, "run_id": "run_fixture"}))
+    assert not result.is_error
+    assert calls == [{"operation": operation.removeprefix("mas_"), "request": {"value": "hello"}, "state_path": tmp_path / "state/run_fixture.json", "approve_writes": False}]
+
+
+@pytest.mark.parametrize("operation", ["mas_run", "mas_recover"])
+def test_generated_mcp_write_requires_host_trusted_handler(tmp_path, spec_dict, monkeypatch, operation):
+    data = copy.deepcopy(spec_dict)
+    data["agents"][0]["sandbox"] = "workspace_write"
+    module, server, calls = generated_mcp_server(tmp_path, ArchitectureSpec.model_validate(data), monkeypatch, trusted=False)
+
+    async def automatic_accept(context, message, schema):
+        return SimpleNamespace(action="accept", data=SimpleNamespace(approve=True))
+
+    monkeypatch.setattr(module.Context, "elicit", automatic_accept)
+    result = asyncio.run(server.call_tool(operation, {"request": {"value": "hello"}, "run_id": "run_fixture"}))
+    assert result.is_error and not calls
+    assert result.structured_content["error"]["code"] == "approval_channel_unavailable"
+
+
+def test_generated_mcp_validates_run_id_before_approval(tmp_path, spec_dict, monkeypatch):
+    data = copy.deepcopy(spec_dict)
+    data["agents"][0]["sandbox"] = "workspace_write"
+    module, server, calls = generated_mcp_server(tmp_path, ArchitectureSpec.model_validate(data), monkeypatch)
+
+    async def forbidden(*args):
+        pytest.fail("Invalid run ID must not reach the approval channel")
+
+    monkeypatch.setattr(module.Context, "elicit", forbidden)
+    result = asyncio.run(server.call_tool("mas_run", {"request": {"value": "hello"}, "run_id": "bad\nAPPROVE"}))
+    assert result.is_error and result.structured_content["error"]["code"] == "invalid_input"
+    assert not calls
 
 
 def test_actual_plugin_launcher_without_cli_arguments(tmp_path):

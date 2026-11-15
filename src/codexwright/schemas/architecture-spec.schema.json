@@ -92,6 +92,11 @@
           "minimum": 1,
           "title": "Timeout Seconds",
           "type": "integer"
+        },
+        "compact_between_iterations": {
+          "default": false,
+          "title": "Compact Between Iterations",
+          "type": "boolean"
         }
       },
       "required": [
@@ -426,12 +431,52 @@
           "title": "Mode",
           "type": "string"
         },
+        "strategy": {
+          "default": "host_dag",
+          "enum": [
+            "host_dag",
+            "native_subagents"
+          ],
+          "title": "Strategy",
+          "type": "string"
+        },
+        "root_agent": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,79}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Root Agent"
+        },
         "max_parallel": {
           "default": 1,
           "maximum": 12,
           "minimum": 1,
           "title": "Max Parallel",
           "type": "integer"
+        },
+        "max_iterations": {
+          "default": 1,
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Max Iterations",
+          "type": "integer"
+        },
+        "stop_when": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Condition"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "result_packets": {
           "items": {

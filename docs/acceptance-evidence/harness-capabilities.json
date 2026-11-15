@@ -1,0 +1,43 @@
+{
+  "date": "2026-11-15",
+  "package_version": "0.5.0",
+  "sdk_runtime": "0.167.0",
+  "native_subagents": {
+    "status": "passed",
+    "output": {"value": "alpha-beta"},
+    "configured_role_files": true,
+    "child_count": 2,
+    "child_roles": ["explorer", "explorer"],
+    "parent_threads_verified": true,
+    "terminal_child_evidence": true,
+    "root_turns_observed": 1,
+    "root_tokens_observed": 41378,
+    "native_usage_unmeasured": true,
+    "scope": "Read-only isolated two-file fixture; root usage is not a whole-tree total or a performance benchmark. An earlier no-delegation response was rejected by the evidence gate."
+  },
+  "iterative_compaction": {
+    "status": "passed",
+    "iterations": [false, true],
+    "final_output": {"value": "OK"},
+    "root_turns_observed": 2,
+    "root_tokens_observed": 18487,
+    "compaction_completion": "completed contextCompaction item in a completed error-free turn confirmed through bounded public thread.read",
+    "compaction_usage_unmeasured": true,
+    "scope": "Two-iteration live refinement. A separate short 10-second probe remained unknown; a bounded longer reconciliation completed."
+  },
+  "generated_mcp_approval": {
+    "host_trusted_handler_required": true,
+    "standalone_stdio_writes": "blocked",
+    "automatic_client_accept_without_handler": "blocked",
+    "run_id_validated_before_approval": true,
+    "real_human_ui_commissioned": false
+  },
+  "recovery": {
+    "read_only_terminal_turn_retry": "tested",
+    "native_descendants_must_be_terminal": "tested",
+    "unknown_write_replay": "blocked_in_tests",
+    "write_packet_validation_retry": "blocked_in_tests",
+    "historical_usage_unavailable": "marked_unmeasured",
+    "pending_compaction_restart": "blocked_and_reconciled_without_duplicate_request_in_tests"
+  }
+}

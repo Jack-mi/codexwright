@@ -1,5 +1,28 @@
 # Implementation Acceptance Ledger
 
+## Harness Capability Follow-up: 2026-11-15
+
+The generated runtime now supports the default host DAG, bounded read-only
+iteration, and configured native subagents. Native roles are private TOML
+configs; completion requires terminal child evidence plus declared `agentRole`
+and `parentThreadId` checks. Public 0.167 reads do not expose descendant usage,
+so native runs explicitly retain `native_usage_unmeasured` and do not claim a
+whole-tree token budget.
+
+Iterative runs require an executable stop condition. Manual compaction requires
+a completed public `contextCompaction` record, and pending compaction is
+reconciled without starting a duplicate request. Read-only recovery reconciles
+the original Thread/Turn before retrying; unknown writes remain blocked.
+Generated MCP writes require a host-injected trusted approval handler;
+standalone stdio and automatic client acceptance without that handler are
+blocked. Actual human UI commissioning remains separate.
+
+Source and independent installed-wheel suites each pass 217 tests, one skipped
+test and six example subtests. Live isolated probes also pass two configured
+native explorers with verified roles/parents, and two-iteration refinement with
+completed public compaction evidence. See `acceptance-evidence/harness-capabilities.json`
+and `harness-capabilities.md` for exact scope and remaining limits.
+
 Historical goal: implement the complete agreed blueprint, including the user's source-runtime and multi-harness corrections. The earlier release request authorized that release's commit/push/publication; it does not authorize publishing subsequent changes. Version 0.3.0 retired the builder CLI. Version 0.4.0 hardened Skill + MCP contracts, approval/retry, protocol compatibility, bounded output and stage recovery without paid/remote services. Version 0.4.1 added indexed material retrieval, result-only paging, early scope validation and separated usage/progress signals. See [feedback acceptance](mcp-0.4.1-feedback.md) and [historical 0.4.0 acceptance](mcp-0.4-acceptance.md) for their distinct evidence and limits. Version 0.5.0 renames the project and public contract to codexwright.
 
 ## Current Product Definition

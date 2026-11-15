@@ -309,7 +309,7 @@ codexwright Python 宿主
 
 ### 5.3 多 Agent 的真实实现方式
 
-SDK 没有稳定的 `create_agent()`、`spawn_agent()`、`register_tool()`、`install_skill()`、`create_worktree()`、Crew、Flow 或通用 MAS API。
+SDK 没有稳定的宿主 `create_agent()`、`spawn_agent()`、`register_tool()`、`install_skill()`、`create_worktree()`、Crew、Flow 或通用 MAS API。这里描述的是公开 Python 控制面，不表示底层 harness 没有原生 subagents；受支持配置可以启用 Root Agent 内部协作，见 [Harness capabilities](harness-capabilities.md)。
 
 正确组合方式：
 
@@ -325,6 +325,8 @@ ArchitectureSpec
 ```
 
 `AsyncCodex` 提供异步原语，不负责 DAG、共享状态、并发上限、总预算、失败传播和集成。`thread_resume()` 恢复对话上下文，不是工作流步骤重放；`thread_fork()` 不复制 Git 工作区。
+
+原生分派通过普通 Root Turn 和受支持 multi-agent 配置启用，由 Root Agent 调用内部协作工具。它不是宿主 Python `spawn_agent()`。两种分派可以共存：严格 DAG 使用宿主 Thread，动态只读探索使用原生 subagents。0.167 的公开读取接口不能汇总子 Agent token usage，也不能据此声称全树 token 预算成立。
 
 ### 5.4 必须由 codexwright 自己实现
 
@@ -348,9 +350,9 @@ ArchitectureSpec
 | 自动化 | 宿主自行实现 | Desktop/Web Scheduled 等产品体验 | 不是完整调度产品 |
 | codexwright 用法 | **唯一 Agent 构建依赖** | 可选接入和人工验收界面 | 不直接依赖其实验 API |
 
-以下能力不能从客户端或 app-server 反推为公开 Python SDK 能力：
+以下能力不能从客户端或 app-server 反推为公开 Python SDK 的直接调用方法：
 
-- `dynamicTools`、原生 subagent 管理、skills/hooks/plugin 管理 RPC。
+- `dynamicTools`、直接 spawn/manage 子 Agent 的宿主方法、skills/hooks/plugin 管理 RPC。
 - managed worktree、Scheduled tasks、IDE selection、桌面文件产物和通知 UI。
 - 公开人工审批 handler 或 `ApprovalMode.human`。
 - 根据 generated schema 或私有 goal 操作推断出的高级生命周期 API。

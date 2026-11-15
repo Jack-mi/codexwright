@@ -294,6 +294,9 @@ The versioned **ArchitectureSpec** is the executable contract, not just a diagra
 - **Skills where they belong:** reusable procedures are loaded through public `SkillInput`. Generation, discovery, loading, and asserted behavior have distinct evidence.
 - **Narrow tools:** bounded `read_file`/`list_files`, Python CLI modules, and project-local Python stdio MCP servers run through a host-owned registry with schemas, OS sandbox, timeout, output limits, and actual call receipts. General shell is not a builtin tool.
 - **Controls outside the model:** scope, budgets, concurrency, retries, snapshots, approval, and verification are enforced by code. A model verdict alone cannot make a failed run pass.
+- **Two orchestration strategies:** the default host DAG provides deterministic packets and acceptance; optional native subagents support bounded, read-only dynamic exploration with declared roles and a single root result. Native descendant usage is explicitly unmeasured by public SDK 0.167, so strict whole-tree token budgets and differentiated role permissions stay on the host DAG.
+- **Bounded refinement and recovery:** read-only iterative workflows use an executable stop condition, optional public-evidence compaction, and retained Thread/Turn IDs. `recover` reconciles the original turn before retrying; unknown writes are never replayed automatically.
+- **Generated MCP write approval:** task-level `mas_run` and `mas_recover` require a host-injected trusted human approval handler for workspace writes or side-effect tools. Bare client `accept` is not proof of human approval; standalone stdio without the handler blocks writes, and declined confirmation never executes.
 
 Codex SDK supplies threads, turns, structured results, and runtime capabilities. codexwright supplies workflow architecture, lifecycle, orchestration, and verification. The SDK is not the same thing as an interactive Codex client, and codexwright does not invent SDK methods such as `create_agent` or `register_tool`.
 
@@ -325,11 +328,20 @@ python3 -m venv .venv
 .venv/bin/mas serve
 ```
 
-The generated MCP exposes `mas_run`, `mas_status`, `mas_read`, and `mas_verify` at the **task level**, not one public service per internal Agent. Its run state defaults outside the installed package, under `$XDG_STATE_HOME/codex-workflows` or `~/.local/state/codex-workflows`; use `--state-dir` or `WORKFLOW_STATE_DIR` to override it. Checkpoints bind the exact spec and input.
+The generated MCP exposes `mas_run`, `mas_recover`, `mas_status`, `mas_read`, and `mas_verify` at the **task level**, not one public service per internal Agent. Its run state defaults outside the installed package, under `$XDG_STATE_HOME/codex-workflows` or `~/.local/state/codex-workflows`; use `--state-dir` or `WORKFLOW_STATE_DIR` to override it. Checkpoints bind the exact spec and input.
 
 CI means **continuous integration**: an automated environment that reruns commands/tests when code changes. It can call your generated workflow's CLI or a codexwright MCP client; it is not another Agent or a mandatory service form. Unattended CI cannot fabricate the human approval required to apply a builder proposal.
 
 ## Current Acceptance
+
+For the 2026-11-15 harness follow-up, source and independent installed-wheel
+suites each pass **217 tests, one skipped test, and six example subtests**.
+Live isolated probes verify two configured native explorers with declared roles
+and parents, plus bounded iterative refinement with completed public compaction
+evidence. Native descendant usage remains explicitly unmeasured; generated MCP
+writes require a host-injected trusted approval handler and standalone stdio
+blocks them without one. See [Harness capabilities](docs/harness-capabilities.md)
+and its [scoped evidence](docs/acceptance-evidence/harness-capabilities.json).
 
 For 0.5.0, source and independent installed-wheel suites each pass **180 tests,
 one skipped test, and six example subtests**. The clean wheel contains only the

@@ -23,20 +23,33 @@ SDK_VERSION = "0.167.0"
 def sdk_capabilities():
     from openai_codex import AsyncThread
 
-    return {
-        "sdk_version": SDK_VERSION,
-        "builder_python": sys.executable,
+    public_api = {
         "thread_start": str(inspect.signature(AsyncCodex.thread_start)),
         "thread_resume": str(inspect.signature(AsyncCodex.thread_resume)),
         "turn": str(inspect.signature(AsyncThread.turn)),
         "config": str(inspect.signature(CodexConfig)),
+        "spawn_agent": "not_exposed",
+    }
+    return {
+        "sdk_version": SDK_VERSION,
+        "builder_python": sys.executable,
+        **public_api,
+        "public_python_api": public_api,
+        "runtime_config_harness": {
+            "native_subagents_supported": True,
+            "native_subagents": "Native runtime/model collaboration is supported independently of host Python methods; the builder disables it by default and generated workflows may opt in through ArchitectureSpec",
+            "observed_item_types": ["collabAgentToolCall", "collabToolCall", "contextCompaction"],
+            "descendant_usage": "unavailable_public_api_0.167; root observations are not whole-tree totals",
+            "compaction_completion": "thread.compact acknowledges only; use bounded thread.read reconciliation for completed contextCompaction evidence",
+            "event_boundary": "Item lifecycle metadata only; no prompt, reasoning or secret payloads",
+        },
         "no_agent_tools_parameter": True,
         "documented_no_tools_config": ["features.shell_tool=false", "features.apply_patch_freeform=false", "features.multi_agent=false", "features.hooks=false", "features.apps=false", "web_search=\"disabled\"", "skills.include_instructions=false"],
         "skills": "TextInput with $skill-name plus SkillInput(name, absolute_SKILL_path); separate discovery and behavior verification",
         "external": "ExternalMessage as complete input; cannot be mixed into a user-input list",
         "budget": "Aggregate SDK token usage includes runtime/system prompt and input context. Inherit caller budget unless a smaller target budget is explicitly requested; short output does not mean a small token budget. Fixed local 0.167.0 trials consumed about 10000 input+output tokens for one no-tool turn, not a universal provider estimate.",
         "mcp": "mcp==2.3.0 uses MCPServer from mcp.server.mcpserver, snake_case ToolAnnotations and ClientSession",
-        "tools": "Bounded read_file/list_files builtins, Python CLI modules and project-local Python stdio MCP servers use the host-owned registry, schemas, OS sandbox and actual receipts. General native shell tools are disabled. No public tools=[], register_tool or spawn_agent method.",
+        "tools": "Bounded read_file/list_files builtins, Python CLI modules and project-local Python stdio MCP servers use the host-owned registry, schemas, OS sandbox and actual receipts. General native shell tools are disabled. Host Python exposes no tools=[], register_tool or spawn_agent method; native subagents are runtime/config harness capabilities, not missing runtime functionality.",
     }
 
 
@@ -409,7 +422,41 @@ class CodexRuntime:
         completed_tools = set()
         async for event in handle.stream():
             payload = event.payload
-            if event.method == "item/completed":
+            raw_payload = serializable(payload)
+            params = raw_payload.get("params", raw_payload) if isinstance(raw_payload, dict) else {}
+            raw_item = params.get("item", {}) if isinstance(params, dict) else {}
+            thread_id = params.get("threadId") if isinstance(params, dict) else None
+            thread_id = thread_id or self.handle_threads.get(handle.id)
+            turn_id = params.get("turnId", handle.id) if isinstance(params, dict) else handle.id
+            if event.method in ("item/started", "item/completed"):
+                item_type = raw_item.get("type") if isinstance(raw_item, dict) else None
+                fields = {
+                    "method": event.method,
+                    "thread_id": thread_id,
+                    "turn_id": turn_id,
+                    "item_type": item_type,
+                    "item_id": raw_item.get("id") if isinstance(raw_item, dict) else None,
+                    "status": raw_item.get("status") or ("inProgress" if event.method == "item/started" else "completed"),
+                }
+                if item_type in {"collabAgentToolCall", "collabToolCall"}:
+                    sender = raw_item.get("senderThreadId")
+                    receiver = raw_item.get("receiverThreadId")
+                    receivers = raw_item.get("receiverThreadIds") or []
+                    spawned = raw_item.get("newThreadId")
+                    agent_states = {child_id: child.get("status") for child_id, child in (raw_item.get("agentsStates") or {}).items() if isinstance(child, dict)}
+                    fields.update({
+                        "tool": raw_item.get("tool"),
+                        "parent_thread_id": sender or thread_id,
+                        "child_thread_id": spawned or receiver or (receivers[0] if len(receivers) == 1 else None),
+                        "child_thread_ids": spawned and [spawned] or ([receiver] if receiver else receivers),
+                        "sender_thread_id": sender,
+                        "receiver_thread_id": receiver,
+                        "receiver_thread_ids": receivers,
+                        "new_thread_id": spawned,
+                        "agent_statuses": agent_states,
+                    })
+                self.event("runtime_event", **fields)
+            if event.method == "item/completed" and hasattr(payload, "item"):
                 item = payload.item.root if hasattr(payload.item, "root") else payload.item
                 if getattr(item, "type", None) == "commandExecution":
                     items.append(serializable(item))
@@ -431,8 +478,8 @@ class CodexRuntime:
                     self.account_usage(thread_id, handle.id, usage)
             elif event.method == "turn/completed":
                 completed = payload.turn
-                self.event("turn_terminal", turn_id=handle.id, status=getattr(completed.status, "value", completed.status))
-            if event.method in ("item/started", "item/completed", "turn/completed"):
+                self.event("turn_terminal", thread_id=thread_id, turn_id=handle.id, status=getattr(completed.status, "value", completed.status))
+            if event.method == "turn/completed":
                 self.event("runtime_event", method=event.method, turn_id=handle.id)
         if completed is None:
             raise CodexwrightError("outcome_unknown", "Turn stream ended without terminal evidence")

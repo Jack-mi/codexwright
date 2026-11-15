@@ -106,6 +106,7 @@ class AgentSpec(Contract):
     model: str | None = None
     effort: Literal["minimal", "low", "medium", "high", "xhigh"] | None = None
     timeout_seconds: int = Field(default=120, ge=1, le=600)
+    compact_between_iterations: bool = False
 
 
 class SkillSpec(Contract):
@@ -167,7 +168,11 @@ class WorkPacket(Contract):
 
 class Orchestration(Contract):
     mode: Literal["sequential", "parallel", "iterative"] = "sequential"
+    strategy: Literal["host_dag", "native_subagents"] = "host_dag"
+    root_agent: Identifier | None = None
     max_parallel: int = Field(default=1, ge=1, le=12)
+    max_iterations: int = Field(default=1, ge=1, le=8)
+    stop_when: Condition | None = None
     result_packets: list[Identifier] = Field(min_length=1)
     integration: str = "Preserve every packet status, result, and evidence."
 
@@ -244,6 +249,8 @@ class ArchitectureSpec(Contract):
         for agent in self.agents:
             if not set(agent.skills) <= skills or not set(agent.tools) <= tools:
                 raise ValueError("Agent references unknown skill or tool")
+            if agent.compact_between_iterations and agent.thread_strategy != "reuse":
+                raise ValueError("Manual compaction requires a reused agent thread")
         for packet in self.work_packets:
             if packet.agent not in agents or not set(packet.depends_on) <= packets.keys():
                 raise ValueError("Packet references unknown agent or dependency")
@@ -300,6 +307,8 @@ class ArchitectureSpec(Contract):
                 raise ValueError("Skills require explicit behavioral evaluation cases")
             if skill.lifecycle != "generated":
                 raise ValueError("Only the host evidence ledger can claim a discovered, loaded or verified Skill")
+            if not any(skill.name in agents[packet.agent].skills and packet.assertions for packet in self.work_packets):
+                raise ValueError("Every Skill requires an assigned packet with executable behavioral assertions")
         for check in self.verification.checks:
             if check.kind == "import" and check.target.endswith(".py"):
                 safe_relative(check.target)
@@ -322,6 +331,33 @@ class ArchitectureSpec(Contract):
             raise ValueError("A workflow must contain a required packet")
         if self.orchestration.max_parallel > self.controls.budget.max_parallel:
             raise ValueError("Workflow concurrency exceeds its aggregate budget")
+        if self.orchestration.strategy == "native_subagents":
+            root = self.orchestration.root_agent
+            if root not in agents or len(self.agents) < 2:
+                raise ValueError("Native subagents require a declared root and at least one child role")
+            if len(self.work_packets) != 1 or self.work_packets[0].agent != root or self.orchestration.result_packets != [self.work_packets[0].id]:
+                raise ValueError("Native subagents use one root result packet; other agents are role declarations")
+            if any(agent.sandbox != "read_only" for agent in self.agents) or any(tool.side_effect for tool in self.tools):
+                raise ValueError("Native subagents are currently limited to read-only, side-effect-free workflows")
+            if any(set(agent.tools) != set(agents[root].tools) or set(agent.skills) != set(agents[root].skills) for agent in self.agents):
+                raise ValueError("Native roles inherit the root tool and Skill scope; declare the same scope on every role")
+            if any(not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", agent.id) for agent in self.agents if agent.id != root):
+                raise ValueError("Native child role IDs must be portable lowercase kebab-case")
+            if self.orchestration.mode == "iterative" or self.orchestration.max_iterations != 1 or self.orchestration.stop_when:
+                raise ValueError("Native subagents do not use host DAG iteration")
+        elif self.orchestration.root_agent is not None:
+            raise ValueError("root_agent is only valid for native subagents")
+        if self.orchestration.mode == "iterative":
+            if self.orchestration.strategy != "host_dag" or self.orchestration.max_iterations < 2 or not self.orchestration.stop_when:
+                raise ValueError("Iterative workflows require host_dag, at least two iterations, and stop_when")
+            if self.orchestration.stop_when.packet not in packets:
+                raise ValueError("Iteration stop condition references an unknown packet")
+            if any(agent.sandbox != "read_only" for agent in self.agents) or any(tool.side_effect for tool in self.tools):
+                raise ValueError("Repeated iterations are limited to read-only, side-effect-free workflows")
+        elif self.orchestration.max_iterations != 1 or self.orchestration.stop_when:
+            raise ValueError("Iteration controls require iterative orchestration")
+        if self.orchestration.mode != "iterative" and any(agent.compact_between_iterations for agent in self.agents):
+            raise ValueError("compact_between_iterations requires iterative orchestration")
         if not any(check.kind != "artifact" for check in required_checks):
             raise ValueError("Runnable workflows require an executable verification check")
         if self.runtime.action == "migrate" and not any(check.kind == "migration" for check in required_checks):
@@ -339,7 +375,7 @@ class ArchitectureSpec(Contract):
                 raise ValueError("Builtin/MCP tools require a matching registry smoke check")
         if self.runtime.action in {"new", "migrate"}:
             used_agents = {packet.agent for packet in self.work_packets}
-            if used_agents != agents.keys():
+            if self.orchestration.strategy == "host_dag" and used_agents != agents.keys():
                 raise ValueError("Every declared agent must own a work packet")
             if any(check.kind == "codex_smoke" and (check.target != "workflow.py" or not check.arguments or check.arguments[0] != "run" or check.expected_json is not None) for check in required_checks):
                 raise ValueError("Generated live checks must execute workflow.py run; validate the state using expected JSON Schema, not exact whole-state JSON")
