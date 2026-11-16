@@ -26,6 +26,6 @@ def test_skill_cannot_self_promote(spec_dict):
 
 def test_generated_check_cannot_confuse_operation_and_workflow_status(spec_dict):
     spec_dict["runtime"] = {"source": "none", "target": "codex_sdk", "action": "new"}
-    spec_dict["verification"]["checks"].append({"id": "live", "kind": "codex_smoke", "target": "workflow.py", "arguments": ["run"], "expected": {"type": "object", "properties": {"status": {"const": "completed"}}}})
+    spec_dict["verification"]["checks"].append({"id": "live", "kind": "codex_smoke", "target": "run_workflow.py", "arguments": ["run"], "expected": {"type": "object", "properties": {"status": {"const": "completed"}}}})
     with pytest.raises(ValueError, match="status is passed"):
         ArchitectureSpec.model_validate(spec_dict)

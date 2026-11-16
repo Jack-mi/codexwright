@@ -98,6 +98,7 @@ Your Codex / Claude Code / OpenCode / MCP client
 
 - **Builder:** one shared construction service exposed through stdio MCP, with thin Skill/host adapters. Skills guide discovery and invocation, not implementation. The builder has no terminal operation commands.
 - **Generated workflow:** a standalone Codex SDK package with library, `mas` CLI, and task-level MCP entrypoints. It does not import codexwright at runtime.
+- **CLI entrypoint:** `run_workflow.py` is the generated workflow's runtime entrypoint; `mas` invokes the same `main()` implementation. It is not the builder's construction script.
 - **Optional target delivery:** plugins, HTTP endpoints, and resident workers can be requested. They are not default scaffold outputs or prebuilt hosting products in this release.
 - **Host independence:** Claude Code and OpenCode invoke the same builder; their model/runtime does not replace Codex SDK inside the builder or target.
 

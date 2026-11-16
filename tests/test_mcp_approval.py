@@ -32,4 +32,4 @@ def test_real_stdio_approval_accept_decline_and_unavailable(tmp_path, spec):
     assert not list(root.iterdir())
     result = asyncio.run(call("accept"))
     assert not result.is_error and result.structured_content["status"] == "completed", result
-    assert (root / "workflow.py").is_file()
+    assert (root / "run_workflow.py").is_file()

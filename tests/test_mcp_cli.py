@@ -191,7 +191,7 @@ def generated_mcp_server(tmp_path, spec, monkeypatch, trusted=True):
 
     monkeypatch.setattr(flow, "run", stub("run"))
     monkeypatch.setattr(flow, "recover", stub("recover"), raising=False)
-    monkeypatch.setitem(sys.modules, "workflow", flow)
+    monkeypatch.setitem(sys.modules, "run_workflow", flow)
     module_spec = importlib.util.spec_from_file_location("generated_mcp_fixture", root / "mcp_server.py")
     module = importlib.util.module_from_spec(module_spec)
     monkeypatch.setitem(sys.modules, module_spec.name, module)

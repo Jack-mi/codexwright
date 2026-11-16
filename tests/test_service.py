@@ -63,7 +63,7 @@ def prepared(service, root, workspace, spec):
     spec = service.save_spec(session, spec)
     baseline = snapshot(root)
     proposal_id = identifier("prop")
-    proposal = {"id": proposal_id, "session_id": session["id"], "workspace_id": workspace["id"], "spec_revision": spec.revision, "spec_hash": digest(spec.model_dump(mode="json")), "workspace_snapshot": baseline, "changes": [{"path": "workflow.py", "action": "write", "content": "print('fixture')\n"}], "write_roots": ["."], "verification": {"status": "passed"}, "status": "prepared"}
+    proposal = {"id": proposal_id, "session_id": session["id"], "workspace_id": workspace["id"], "spec_revision": spec.revision, "spec_hash": digest(spec.model_dump(mode="json")), "workspace_snapshot": baseline, "changes": [{"path": "run_workflow.py", "action": "write", "content": "print('fixture')\n"}], "write_roots": ["."], "verification": {"status": "passed"}, "status": "prepared"}
     service.store.write("proposals", proposal_id, proposal)
     return proposal, session
 
@@ -76,7 +76,7 @@ def test_exact_approval_apply_and_replay(tmp_path, spec):
     request = {**approved, "idempotency_key": "apply-one"}
     result = asyncio.run(service.apply(request))
     assert result["status"] == "completed" and result["verification"] == "passed"
-    assert (root / "workflow.py").exists()
+    assert (root / "run_workflow.py").exists()
     assert (root / "user.txt").read_text() == "keep existing changes"
     assert asyncio.run(service.apply(request)) == result
     with pytest.raises(Exception, match="consumed"):
@@ -94,7 +94,7 @@ def test_forged_or_stale_approval_cannot_write(tmp_path, spec):
     (root / "new-user-change.txt").write_text("external modification")
     result = asyncio.run(service.apply({**approved, "idempotency_key": "y"}))
     assert result["status"] == "failed" and result["error"]["code"] == "workspace_conflict"
-    assert not (root / "workflow.py").exists()
+    assert not (root / "run_workflow.py").exists()
 
 
 def test_plan_spec_requires_actual_runtime_route(tmp_path, spec_dict):

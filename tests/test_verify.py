@@ -29,8 +29,8 @@ def test_executable_check_captures_failure(tmp_path):
 def test_import_check_accepts_module_or_python_file(tmp_path):
     root = tmp_path / "target"
     root.mkdir()
-    (root / "workflow.py").write_text("value='imported'\n")
-    for target in ("workflow", "workflow.py"):
+    (root / "run_workflow.py").write_text("value='imported'\n")
+    for target in ("run_workflow", "run_workflow.py"):
         record = execute_check(CheckSpec(id="import", kind="import", target=target), root, tmp_path / "evidence")
         assert record["status"] == "passed", record
     with pytest.raises(Exception):

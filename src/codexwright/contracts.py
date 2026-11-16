@@ -322,7 +322,7 @@ class ArchitectureSpec(Contract):
                 raise ValueError("Unittest expected is a literal output marker: use OK or null, never prose")
             if check.kind == "artifact" and isinstance(check.expected, str):
                 raise ValueError("Artifact expected must be a JSON Schema, not a prose acceptance condition")
-            if self.runtime.action in {"new", "migrate"} and check.target == "workflow.py" and check.kind == "cli_smoke":
+            if self.runtime.action in {"new", "migrate"} and check.target == "run_workflow.py" and check.kind == "cli_smoke":
                 raise ValueError("Generated workflow CLI run needs codex_smoke; status/verify is tested with an offline checkpoint in unittest")
         required_checks = [check for check in self.verification.checks if check.required]
         if len({check.id for check in self.verification.checks}) != len(self.verification.checks):
@@ -377,8 +377,8 @@ class ArchitectureSpec(Contract):
             used_agents = {packet.agent for packet in self.work_packets}
             if self.orchestration.strategy == "host_dag" and used_agents != agents.keys():
                 raise ValueError("Every declared agent must own a work packet")
-            if any(check.kind == "codex_smoke" and (check.target != "workflow.py" or not check.arguments or check.arguments[0] != "run" or check.expected_json is not None) for check in required_checks):
-                raise ValueError("Generated live checks must execute workflow.py run; validate the state using expected JSON Schema, not exact whole-state JSON")
+            if any(check.kind == "codex_smoke" and (check.target != "run_workflow.py" or not check.arguments or check.arguments[0] != "run" or check.expected_json is not None) for check in required_checks):
+                raise ValueError("Generated live checks must execute run_workflow.py run; validate the state using expected JSON Schema, not exact whole-state JSON")
             for check in required_checks:
                 if check.kind == "codex_smoke" and isinstance(check.expected, dict):
                     status_schema = check.expected.get("properties", {}).get("status", {})

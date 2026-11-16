@@ -10,7 +10,7 @@ from codexwright.target import scaffold
 
 
 def load(root):
-    module_spec = importlib.util.spec_from_file_location("generated_workflow_fixture", root / "workflow.py")
+    module_spec = importlib.util.spec_from_file_location("generated_workflow_fixture", root / "run_workflow.py")
     module = importlib.util.module_from_spec(module_spec)
     import sys
     sys.modules.pop("execution", None)
@@ -86,7 +86,10 @@ def test_standalone_run_schema_and_checkpoint(tmp_path, spec, monkeypatch):
         asyncio.run(module.run({"value": "changed"}, state_path=checkpoint))
     with pytest.raises(Exception):
         asyncio.run(module.run({"missing": "hello"}))
-    assert "codexwright" not in (root / "workflow.py").read_text()
+    assert (root / "run_workflow.py").is_file()
+    assert not (root / "workflow.py").exists()
+    assert "codex_workflow.run_workflow:main" in (root / "pyproject.toml").read_text()
+    assert "codexwright" not in (root / "run_workflow.py").read_text()
 
 
 def test_parallel_dag_handoff_and_failure(tmp_path, spec_dict, monkeypatch):

@@ -64,8 +64,8 @@ def test_post_apply_exception_reports_written_files(tmp_path, spec, monkeypatch)
     monkeypatch.setattr(service, "mechanical_verify", checks)
     result = asyncio.run(service.apply({**approved, "idempotency_key": "post-apply-error"}))
     assert result["status"] == "failed"
-    assert result["changed_files"] == ["workflow.py"] and result["backup_ref"]
-    assert (root / "workflow.py").is_file()
+    assert result["changed_files"] == ["run_workflow.py"] and result["backup_ref"]
+    assert (root / "run_workflow.py").is_file()
 
 
 def test_account_timeout_is_not_runtime_or_auth_success(tmp_path, monkeypatch):

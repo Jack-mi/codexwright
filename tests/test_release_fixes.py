@@ -246,13 +246,13 @@ def test_tools_cannot_read_isolated_sdk_auth(tmp_path, spec_dict, monkeypatch):
 def test_structure_failure_blocks_candidate_execution(tmp_path, spec_dict):
     data = copy.deepcopy(spec_dict)
     data["runtime"] = {"source": "none", "target": "codex_sdk", "action": "new"}
-    data["verification"]["checks"].append({"id": "live", "kind": "codex_smoke", "target": "workflow.py", "arguments": ["run"]})
+    data["verification"]["checks"].append({"id": "live", "kind": "codex_smoke", "target": "run_workflow.py", "arguments": ["run"]})
     spec = ArchitectureSpec.model_validate(data)
     root = tmp_path / "target"
     root.mkdir()
     scaffold(root, spec)
     marker = tmp_path / "executed"
-    (root / "workflow.py").write_text("from pathlib import Path\nPath(" + repr(str(marker)) + ").write_text('bad')\n")
+    (root / "run_workflow.py").write_text("from pathlib import Path\nPath(" + repr(str(marker)) + ").write_text('bad')\n")
     result = verify_project(spec, root, tmp_path / "evidence")
     assert result["status"] != "passed" and not marker.exists()
     assert result["checks"][0]["status"] == "failed"
@@ -269,7 +269,7 @@ def test_frozen_registry_smoke_uses_package_owned_runner(tmp_path, spec_dict):
     data = json.loads((root / "architecture.json").read_text())
     data["runtime"] = {"source": "none", "target": "codex_sdk", "action": "new"}
     data["verification"]["checks"][-1]["arguments"][-1] = '{"path":"notes.txt"}'
-    data["verification"]["checks"].append({"id": "live", "kind": "codex_smoke", "target": "workflow.py", "arguments": ["run"]})
+    data["verification"]["checks"].append({"id": "live", "kind": "codex_smoke", "target": "run_workflow.py", "arguments": ["run"]})
     spec = ArchitectureSpec.model_validate(data)
     scaffold(root, spec)
     result = verify_project(spec, root, tmp_path / "evidence", defer_live=True)
@@ -283,7 +283,7 @@ def test_generated_mcp_and_python310_dependencies_are_checked(tmp_path, spec_dic
     import tomllib
     data = copy.deepcopy(spec_dict)
     data["runtime"] = {"source": "none", "target": "codex_sdk", "action": "new"}
-    data["verification"]["checks"].append({"id": "live", "kind": "codex_smoke", "target": "workflow.py", "arguments": ["run"]})
+    data["verification"]["checks"].append({"id": "live", "kind": "codex_smoke", "target": "run_workflow.py", "arguments": ["run"]})
     spec = ArchitectureSpec.model_validate(data)
     root = tmp_path / "target"
     root.mkdir()

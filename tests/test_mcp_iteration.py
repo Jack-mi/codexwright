@@ -45,7 +45,7 @@ def test_public_apply_replay_does_not_ask_or_write_twice(tmp_path, spec, monkeyp
         assert first.structured_content["status"] == "completed"
         assert second.structured_content == first.structured_content
         assert len(prompts) == 1
-        assert (root / "workflow.py").is_file()
+        assert (root / "run_workflow.py").is_file()
 
     asyncio.run(probe())
 
@@ -412,7 +412,7 @@ def test_actual_stdio_modern_approval_and_replay(tmp_path, spec):
             first = await client.call_tool("codexwright_apply", request)
             repeated = await client.call_tool("codexwright_apply", request)
             assert first.structured_content["status"] == "completed" and first.structured_content == repeated.structured_content
-            assert len(prompts) == 1 and (root / "workflow.py").is_file()
+            assert len(prompts) == 1 and (root / "run_workflow.py").is_file()
     asyncio.run(probe())
 
 
@@ -520,6 +520,6 @@ def test_modern_protocol_approval(tmp_path, spec, action):
             result = await client.call_tool("codexwright_apply", {"request": {"proposal_id": proposal["id"], "idempotency_key": "modern"}})
             assert result.structured_content["status"] == ("completed" if action == "accept" else "failed")
             assert len(messages) == 1
-            assert (root / "workflow.py").exists() == (action == "accept")
+            assert (root / "run_workflow.py").exists() == (action == "accept")
 
     asyncio.run(probe())

@@ -70,8 +70,8 @@ def structure_check(spec, root):
         architecture = json.loads(relative_file(root, "architecture.json").read_text())
         if architecture != spec.model_dump(mode="json"):
             raise CodexwrightError("architecture_drift", "Generated runtime spec differs from the host-approved architecture")
-        source = relative_file(root, "workflow.py").read_text()
-        template = (Path(__file__).parent / "templates/workflow.py").read_text()
+        source = relative_file(root, "run_workflow.py").read_text()
+        template = (Path(__file__).parent / "templates/run_workflow.py").read_text()
         actual = ast.parse(source)
         expected = ast.parse(template)
         if ast.dump(actual, include_attributes=False) != ast.dump(expected, include_attributes=False):
@@ -180,16 +180,16 @@ def trusted_entrypoint(spec, root, temporary, entrypoint):
     directory = Path(temporary) / "trusted_harness"
     directory.mkdir(mode=0o700)
     templates = Path(__file__).parent / "templates"
-    for name in ("workflow.py", "execution.py", "tool_server.py", "mcp_server.py"):
+    for name in ("run_workflow.py", "execution.py", "tool_server.py", "mcp_server.py"):
         (directory / name).write_bytes((templates / name).read_bytes())
     (directory / "architecture.json").write_text(json.dumps(spec.model_dump(mode="json")))
-    for name in ("workflow", "tool_server"):
+    for name in ("run_workflow", "tool_server"):
         code = "import sys\nfrom pathlib import Path\nsys.path.insert(0, str(Path(__file__).resolve().parent))\nimport " + name + " as entry\nentry.ROOT = Path(" + repr(str(Path(root).resolve())) + ")\n"
-        if name == "workflow":
-            code += "entry.TOOL_SERVER = Path(__file__).with_name('run_tool_server.py')\n"
+        if name == "run_workflow":
+            code += "entry.TOOL_SERVER = Path(__file__).with_name('invoke_tool_server.py')\n"
         code += "raise SystemExit(entry.main())\n"
-        (directory / f"run_{name}.py").write_text(code)
-    return directory / f"run_{entrypoint}.py"
+        (directory / f"invoke_{name}.py").write_text(code)
+    return directory / f"invoke_{entrypoint}.py"
 
 
 def execute_check(check, root, output, *, runtime_home=None, model_ports=None, python=None, python_roots=None, spec=None, cancel=None):
@@ -255,7 +255,7 @@ def _execute_check(check, root, output, *, runtime_home=None, model_ports=None, 
             fixed_template = spec is not None and spec.runtime.action in {"new", "migrate"} and (check.kind == "codex_smoke" or check.kind == "tool_smoke" and check.target == "tool_server.py")
             if fixed_template:
                 structure_check(spec, root)
-                entrypoint = "workflow" if check.kind == "codex_smoke" else "tool_server"
+                entrypoint = "run_workflow" if check.kind == "codex_smoke" else "tool_server"
                 runner = trusted_entrypoint(spec, root, temporary, entrypoint)
                 # Only package-owned code runs outside the check sandbox; project tools get their own sandbox.
                 wrapped = [sys.executable, "-I", "-B", str(runner), *argv[2:]]
@@ -325,7 +325,8 @@ def verify_project(spec, root, output, *, runtime_home=None, model_ports=None, d
     records = []
     try:
         skills = structure_check(spec, root)
-        records.append({"id": "host_structure", "kind": "structure", "required": True, "status": "passed", "exit_code": None, "evidence": {"template_sha256": file_hash(Path(__file__).parent / "templates/workflow.py"), "candidate_sha256": file_hash(Path(root) / "workflow.py") if (Path(root) / "workflow.py").is_file() else None, "comparison": "Whole-module AST equals the owning package template" if spec.runtime.action in {"new", "migrate"} else "Existing runtime is preserved; no scaffold replacement"}})
+        candidate = Path(root) / "run_workflow.py" if (Path(root) / "run_workflow.py").is_file() else Path(root) / "workflow.py"
+        records.append({"id": "host_structure", "kind": "structure", "required": True, "status": "passed", "exit_code": None, "evidence": {"template_sha256": file_hash(Path(__file__).parent / "templates/run_workflow.py"), "candidate_sha256": file_hash(candidate) if candidate.is_file() else None, "comparison": "Whole-module AST equals the owning package template" if spec.runtime.action in {"new", "migrate"} else "Existing runtime is preserved; no scaffold replacement"}})
     except Exception as exc:
         skills = []
         records.append({"id": "host_structure", "kind": "structure", "required": True, "status": "failed", "exit_code": None, "error": exc.as_dict() if isinstance(exc, CodexwrightError) else {"code": "structure_failed", "message": type(exc).__name__}})

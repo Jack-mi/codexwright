@@ -7,7 +7,7 @@ from codexwright.verify import verify_project
 
 def test_optional_failure_is_partial_not_complete(tmp_path, spec):
     root = tmp_path / "target"; root.mkdir()
-    (root / "workflow.py").write_text("value = 'fixture'\n")
+    (root / "run_workflow.py").write_text("value = 'fixture'\n")
     (root / "bad.py").write_text("raise SystemExit(8)\n")
     optional = CheckSpec(id="optional_live", kind="cli_smoke", target="bad.py", required=False)
     spec.verification.checks.append(optional)

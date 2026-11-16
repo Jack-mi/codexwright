@@ -8,10 +8,10 @@ from pathlib import Path
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.types import CallToolResult, TextContent
 if __package__:
-    from .workflow import SPEC, run, verify_state
+    from .run_workflow import SPEC, run, verify_state
     from .execution import state_directory
 else:
-    from workflow import SPEC, run, verify_state
+    from run_workflow import SPEC, run, verify_state
     from execution import state_directory
 
 
@@ -54,9 +54,9 @@ def server_for(state_dir, approval_handler=None):
     @server.tool()
     async def mas_recover(request: dict, run_id: str = "latest", ctx: Context = None) -> CallToolResult:
         if __package__:
-            from .workflow import recover
+            from .run_workflow import recover
         else:
-            from workflow import recover
+            from run_workflow import recover
         return await invoke(recover, request, run_id, ctx)
 
     @server.tool()

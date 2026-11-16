@@ -67,7 +67,7 @@ def test_skills_are_explicit_and_the_harness_is_frozen(tmp_path, spec_dict, monk
     data["skills"] = [{"name": "value-format", "trigger": "Format a repeated text result", "procedure": "Return value OK.", "eval_cases": ["text yields OK"], "lifecycle": "generated"}]
     data["agents"][0]["skills"] = ["value-format"]
     data["work_packets"][0]["assertions"] = [{"field": "value", "operator": "equals", "value": "OK"}]
-    data["verification"]["checks"].append({"id": "live", "kind": "codex_smoke", "target": "workflow.py", "arguments": ["run"]})
+    data["verification"]["checks"].append({"id": "live", "kind": "codex_smoke", "target": "run_workflow.py", "arguments": ["run"]})
     data["runtime"] = {"source": "none", "target": "codex_sdk", "action": "new"}
     spec = ArchitectureSpec.model_validate(data)
     root, module = generated(tmp_path, spec, monkeypatch)
@@ -75,7 +75,7 @@ def test_skills_are_explicit_and_the_harness_is_frozen(tmp_path, spec_dict, monk
     result = asyncio.run(module.run({"value": "hello"}))
     assert any(isinstance(item, SkillInput) for values in FakeCodex.inputs if isinstance(values, list) for item in values)
     assert result["packets"]["normalize"]["skills"][0]["lifecycle"] == "verified"
-    (root / "workflow.py").write_text((root / "workflow.py").read_text() + "\nrun = None\n")
+    (root / "run_workflow.py").write_text((root / "run_workflow.py").read_text() + "\nrun = None\n")
     with pytest.raises(Exception, match="host-owned"):
         structure_check(spec, root)
 
