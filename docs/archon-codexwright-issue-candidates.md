@@ -850,3 +850,34 @@ Agent tool handler -> 同一共享执行 -> 工具结果/一条调用事件
 真实模型：run 3511fca6-b861-465b-80b3-bb825c0aff2d，Codex app-server 0.167.0 + catpaw-cli/kimi-k3.1-pro，lookup 从 stdin 读取 count=2.5/items=[{id:7}]，Provider call lookup_0_72bb7302，只写一条 completed 事件。节点 structured_output 恰为 {summary:'Checks are red',green:false}，declared_fields 只有 summary/green。Token input=18529/output=138，费用未报告。证据 /tmp/archon-tools-followup-live-20261119/。
 
 远端 Docs Build 和 Test Suite 当前为 action_required，等待维护者批准 fork CI；这与 CI 通过、维护者接受或合并不同，不能提前宣称完成。未运行 live Claude/Pi、Docker 或本机 Windows；Windows 用例交给远端 Windows CI。
+
+## 12. 中断会话恢复与第二轮评审修复（2026-11-19）
+
+从会话「对比 Archon 与 build-mas」恢复：额度用尽前最后完成了 18 项工具测试，第二轮修复仍未提交。原始 session 是 01a1d29e-1484-75d3-b03c-075bb16440b3；本轮继续 Archon PR #5951，不重开 PR，不改 codexwright 的运行时代码，不写 knowledge-base。
+
+### 已完成的第二轮代码修复
+
+- Provider 共同 JSON Schema 校验改为运行时 AJV，支持 not，保持原始输入不填 default、不强制类型转换。Pi execute 在 handler 前显式校验，测试入口计数放在断言前，不能再用 handler 自己抛错掩盖校验绕过。
+- thrown-error 路径遇到未知写入时记录 failure_kind=unknown，保留 typed provider_failure；用现有 failure resolver 统一处理，复杂度检查通过，不增加 Ratchet-Allow。
+- 脚本源码 recheck 后再次确认关闭/abort 状态，禁止停止后才启动。回归测试用明确的 recheck 和实际启动 barrier，而不是靠调度概率。
+- 写调用停止和未知事件持久化分别有 1 秒等待上限；持久化卡住时节点仍 unknown/non-retryable，但不声称事件已写入。
+- 复用 subprocess 收集的凭证值，递归脱敏 durable event 的 input/output/error；Agent 仍收到原始结果。测试覆盖嵌套对象及数组字符串。certified null 保持 JSON null，不退化为字符串。
+- Windows 子进程回归记录并检查 descendant PID；只有 ESRCH 表示进程不存在。macOS recorded 路径通过，Windows-only 用例留给 CI。
+- 全量回归发现两条真实模板清单遗漏，已把 tools 的 description/script/deps/input_schema/output_schema 分类为静态元数据或字面资源标识，不增加插值能力；5 项 template-walker 测试通过。这两条不归为基线失败。
+
+### 提交和验证边界
+
+- 修复提交 cfe5473bd，合入 upstream/dev@b65bf8ea3 后 merge 提交 29a090951，错误分类整理 344fd2007，模板清单补齐 6c470e2d4。最终交付继续原分支 codex/issue-5230-script-tools-lite。
+- 合并后 Providers 全量 1541 pass / 0 fail，75 隔离分组；Provider-contract 263 pass / 0 fail；script tools 18 pass；模板清单 5 pass；loop 70 pass。CI 原命令 static 与 ratchet 均通过，最终回归日志在 /tmp/archon-5951-delivery-*.log。
+- 首次完整 Workflows 重跑为 6363 pass / 4 fail：两条 uv 环境断言、两条本 PR 模板清单遗漏。后者已修并重跑全量。未修改基线 44ec667f3 再次复现前两条 uv 失败，36 pass / 2 fail；本 PR 未改变 dry-run-exec 实现或断言。
+- 新真实模型 run 714ce8a4-8045-4b48-b9c5-a1ed767b3986 在 2026-11-19 06:46（上海时间）收到 Kimi 当日额度为零的响应，工具调用数为零，未获得有效模型结果。没有反复重试、自动切模型、申请额度或改变凭证。此前成功 stdin run 3511fca6-b861-465b-80b3-bb825c0aff2d 仅为旧 head 历史证据，不能充当本次最终 head 的 live E2E。
+- 第二轮 10 个 CodeRabbit 线程已逐条发布对应修复说明并解决；这表示提交者已处理旧意见，不等于维护者批准或新一轮 review 通过。PR 正文同时披露 final-head live 验证缺口。
+- 最新 head 的 Docs Build/Test Suite 仍需要维护者批准 fork CI。实现和提交交付、远端 CI、真实模型复测、维护者接受及合并必须分别报告；不绕过批准或自行合并。
+
+### 本轮最终交付核验
+
+- 最终 head 6c470e2d49dd2db4ba25c00c64f8ee09bac1bce3 已 push 并与 PR #5951 完全一致，base b65bf8ea36bd580341a9572f3749912bbd70adb7；Archon 工作区干净，PR open/Git mergeable，未合并。
+- 最终全量 Workflows 为 6365 pass / 2 fail / 6 skip，179 隔离分组，只有两条已在未修改基线复现的 uv 断言失败；模板分类两条真实失败已消失。完整日志 /tmp/archon-5951-delivery-workflows-final.log，基线对照 /tmp/archon-5951-baseline-uv.log。
+- 最终 static 日志 /tmp/archon-5951-delivery-static-final.log 全部通过，ratchet 通过，无 waiver。Providers 1541/0，Provider-contract 263/0；工具、模板和 loop 定向覆盖保持通过。
+- PR 正文用 Kimi Bridge 网页更新并已读回确认，明确最新 head 真实模型验证尚未通过。最终 PR 评论 6994183115，Issue #5230 评论 6994140548 已更新并 @Wirasm；第二轮 10 个线程 resolved，新一轮维护者/CodeRabbit 验收未声称完成。
+- 最终 fork CI Test Suite 44416646174、Docs Build 44416646327 均 action_required；需要维护者批准。最末 head 真实模型补测仍待 Kimi 额度恢复，不切换 Provider 或重复空跑。完整 diff 42 文件/1466 新增/146 删除，新增约比旧完整实现 2163 行少 32%，不继续宣称最终版减半。
