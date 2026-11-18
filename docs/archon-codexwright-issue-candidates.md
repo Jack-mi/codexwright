@@ -829,3 +829,24 @@ Agent tool handler -> 同一共享执行 -> 工具结果/一条调用事件
 - Provider-contract 263 pass；工具核心 11 pass；Agent 70/script 42/pack 3/structured-output 24 的定向回归通过；builder round-trip 20 pass。全仓 static Validate 和 ratchet 通过，无 waiver。
 - 最终 head 的第二次真实模型运行：8c698663-3ba9-45be-a6d3-355d58d9864b；Engine call e2540ab3-48cc-4a3d-84e1-39c246efa60d，Provider call lookup_0_07196558，输入/输出/后续断言与前次相同。Token input=18580/output=223，费用仍未知。原始文件 /tmp/archon-tools-lite-live-20261119/live-final-output.log。
 - 待维护者 review/merge；当前远端 PR 可合并但不等于已通过远端 CI 或已发布。未运行 live Claude/Pi、Docker 和 Windows，不声称其端到端验证完毕。
+
+
+## 11. 维护者终审后的精简迭代（2026-11-19）
+
+维护者在 #5951 的最新意见撤销了此前“下游读取 tool_calls”的要求。最终合同是 Agent 在自己的 turn 中取得工具结果并生成普通 output，Engine 只额外保存 script_tool_call 事件。实现仍在原 PR，不新开分支或 PR。
+
+- 删除 schemas/tool-output.ts、输出包装、保留字段检查和派生 output paths/types；builder 仅保留 tools 声明 open/save 所必需的 key 和 round-trip，避免声明被静默丢弃。
+- 工具 JSON 参数改走 named-script invocation 的 stdin，不再使用 ARCHON_TOOL_INPUT；140 KiB 输入有真实脚本回归。
+- Provider JSON Schema 使用只读校验：非法 required/type/additionalProperties 被拒绝，原始输入不经 default 或 Zod 转换后交给 Engine；三家 native adapter 与 plugin wire 均有覆盖。
+- providerNotCalled 按 workload 是否开始记录；quiet unknown-write 不再被标成用户取消；写调用停止最多等待 1 秒，未结束的写只记录一次 unknown 且节点 non-retryable，迟到结果不重复记录。
+- Windows owned-group abort 不再依赖 recorder。上游拆分 subprocess-tree.test.ts 后，回归测试随新文件保留。
+- loop CI 失败仅为 SAMPLE_AI_FIELD_VALUES 缺少 tools 示例，补 fixture 后 70 项通过；未扩展 loop 的工具能力。
+- 文档恢复 Bash and script node timeouts 为三级标题，并改为 stdin 和普通 Agent output 的说明。
+
+最终功能提交 e3907cb5e，合并当前 dev 后 head f173388b8642fef4fd67636034565caf7f89e281，已 push 到 PR #5951。PR 正文、PR 评论 6992918760 和原 Issue 评论 6992925091 已更新，明确撤回旧下游输出方案。
+
+验证：工具核心 14 pass，loop 70 pass，Provider contract 263 pass，Provider 全量 1534 pass / 0 fail，builder 20 pass，合并后 static 与 ratchet 通过。Workflows 全量 3683 pass 后仅有两条 uv 0.9.21 警告断言失败，未修改基线同样失败；合并后 package-tests 的两条 Git safe-directory 失败也在未修改基线复现，均不作为本 PR 修复范围，不修改无关测试掩盖。
+
+真实模型：run 3511fca6-b861-465b-80b3-bb825c0aff2d，Codex app-server 0.167.0 + catpaw-cli/kimi-k3.1-pro，lookup 从 stdin 读取 count=2.5/items=[{id:7}]，Provider call lookup_0_72bb7302，只写一条 completed 事件。节点 structured_output 恰为 {summary:'Checks are red',green:false}，declared_fields 只有 summary/green。Token input=18529/output=138，费用未报告。证据 /tmp/archon-tools-followup-live-20261119/。
+
+远端 Docs Build 和 Test Suite 当前为 action_required，等待维护者批准 fork CI；这与 CI 通过、维护者接受或合并不同，不能提前宣称完成。未运行 live Claude/Pi、Docker 或本机 Windows；Windows 用例交给远端 Windows CI。
